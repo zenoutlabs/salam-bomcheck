@@ -1,0 +1,28 @@
+import os
+
+include csv "csv_input.salam"
+
+func assert(condition: bool):
+    if not condition: printerrln "CSV check failed" os.Exit(1) end
+end
+
+func main:
+    row := csv.ParseLine(`"R1,R2",2,"10k, 1%","Resistor ""Small"""`)
+    assert(row.error == "")
+    assert(row.fields.len() == 4)
+    assert(row.fields.get(0) == "R1,R2")
+    assert(row.fields.get(2) == "10k, 1%")
+    assert(row.fields.get(3) == `Resistor "Small"`)
+    unicode := csv.ParseLine("R1,1,10kΩ,0402")
+    assert(unicode.fields.get(2) == "10kΩ")
+    assert(csv.ParseLine("a,b,").fields.len() == 3)
+    assert(csv.ParseLine(`"a"x,b`).error != "")
+    assert(csv.ParseLine(`a"b,c`).error != "")
+    assert(csv.ParseLine(`"a,b`).error != "")
+    table := csv.Parse("\xEF\xBB\xBFreferences,quantity,value,footprint\r\n\r\nR1,1,10k,0402\r\n")
+    assert(table.error == "")
+    assert(table.rows.len() == 2)
+    assert(table.rows.get(0).fields.get(0) == "references")
+    assert(table.rows.get(1).line == 3)
+    println "CSV checks passed"
+end

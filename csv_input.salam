@@ -1,0 +1,107 @@
+package csv_input
+
+import str
+
+pub struct Row:
+    pub fields: Vector<str> = Vector {}
+    pub line: int = 0
+end
+
+pub struct Table:
+    pub rows: Vector<Row> = Vector {}
+    pub error: str = ""
+    pub error_line: int = 0
+end
+
+pub struct ParsedLine:
+    pub fields: Vector<str> = Vector {}
+    pub error: str = ""
+end
+
+// Strict, single-physical-line CSV with doubled quote escaping.
+// Read bytes to preserve UTF-8 field contents without splitting codepoints.
+pub func ParseLine(line: str): ParsedLine:
+    mut result := ParsedLine {}
+    if str.ByteLen(line) > 65536:
+        result.error = "CSV line exceeds 65536 bytes"
+        ret result
+    end
+    bytes := (line as void*) as u8*
+    mut builder := str.NewBuilder()
+    defer str.BufFree(builder)
+    mut state := 0
+    mut i := 0
+    mut field_size := 0
+    until i < str.ByteLen(line):
+        c := bytes[i] as int
+        if state == 1:
+            if c == 34:
+                if i + 1 < str.ByteLen(line) and bytes[i + 1] == 34:
+                    str.BufAppendChar(builder, 34)
+                    field_size += 1
+                    i += 1
+                else:
+                    state = 2
+                end
+            else:
+                str.BufAppendChar(builder, c)
+                field_size += 1
+            end
+        else c == 44:
+            result.fields.push(str.BufStr(builder))
+            str.BufReset(builder)
+            field_size = 0
+            state = 0
+        else state == 2:
+            result.error = "unexpected character after closing CSV quote"
+            ret result
+        else c == 34:
+            if field_size > 0:
+                result.error = "quote inside unquoted CSV field"
+                ret result
+            end
+            state = 1
+        else:
+            str.BufAppendChar(builder, c)
+            field_size += 1
+        end
+        if field_size > 4096:
+            result.error = "CSV field exceeds 4096 bytes"
+            ret result
+        end
+        i += 1
+    end
+    if state == 1:
+        result.error = "unclosed CSV quote; multiline fields are not supported"
+        ret result
+    end
+    result.fields.push(str.BufStr(builder))
+    ret result
+end
+
+pub func Parse(text: str): Table:
+    mut result := Table {}
+    mut normalized := text
+    if str.ByteLen(normalized) >= 3 and str.ByteSub(normalized, 0, 3) == "\xEF\xBB\xBF":
+        normalized = str.ByteSub(normalized, 3, str.ByteLen(normalized) - 3)
+    end
+    lines := normalized.split("\n")
+    repeat lines.len() in index:
+        mut line := lines.get(index)
+        if str.EndsWith(line, "\r"): line = str.ByteSub(line, 0, str.ByteLen(line) - 1) end
+        if line == "": continue end
+        parsed := ParseLine(line)
+        if parsed.error != "":
+            result.error = parsed.error
+            result.error_line = index + 1
+            ret result
+        end
+        if result.rows.len() >= 2001:
+            result.error = "BOM exceeds 2000 data rows"
+            result.error_line = index + 1
+            ret result
+        end
+        result.rows.push(Row { fields = parsed.fields, line = index + 1 })
+    end
+    ret result
+end
