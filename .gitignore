@@ -1,0 +1,4 @@
+/build/
+/.salam-cache/
+*.o
+*.dSYM/

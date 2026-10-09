@@ -1,0 +1,33 @@
+import os
+
+include numbers "numbers.salam"
+include refs "references.salam"
+
+func assert(condition: bool):
+    if not condition:
+        printerrln "reference check failed"
+        os.Exit(1)
+    end
+end
+
+func main:
+    assert(numbers.Positive("10000", 10000) == 10000)
+    assert(numbers.Positive("10001", 10000) == -1)
+    assert(numbers.Positive("99999999999999999999", 10000) == -1)
+    assert(numbers.Positive("0", 10000) == -1)
+    assert(numbers.Positive("+1", 10000) == -1)
+    good := refs.Parse("r1-r3; C5,LED7")
+    assert(good.error == "")
+    assert(good.values.len() == 5)
+    assert(good.values.get(0) == "R1")
+    assert(good.values.get(2) == "R3")
+    assert(good.values.get(4) == "LED7")
+    assert(refs.Parse("R2-R1").error != "")
+    assert(refs.Parse("R1-C2").error != "")
+    assert(refs.Parse("R01").error != "")
+    assert(refs.Parse("R0").error != "")
+    assert(refs.Parse("R1-R10001").error != "")
+    assert(refs.Parse(" ").error != "")
+    assert(refs.Parse("R1-").error != "")
+    println "reference checks passed"
+end

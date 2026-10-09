@@ -1,0 +1,70 @@
+package references
+
+import conv
+import str
+
+include numbers "numbers.salam"
+
+pub struct Reference:
+    pub prefix: str = ""
+    pub number: int = 0
+    pub error: str = ""
+end
+
+pub struct Result:
+    pub values: Vector<str> = Vector {}
+    pub error: str = ""
+end
+
+pub func ParseOne(text: str): Reference:
+    mut i := 0
+    until i < text.len():
+        c := text[i] as int
+        if not ((c >= 65 and c <= 90) or (c >= 97 and c <= 122)): break end
+        i += 1
+    end
+    if i == 0 or i == text.len():
+        ret Reference { error = "reference must be letters followed by a positive integer" }
+    end
+    digits := text.substr(i, text.len() - i)
+    if digits.len() > 1 and digits[0] == '0':
+        ret Reference { error = "reference numbers must not have leading zeros" }
+    end
+    n := numbers.Positive(digits, 1000000)
+    if n < 0: ret Reference { error = "reference number must be between 1 and 1000000" } end
+    ret Reference { prefix = text.substr(0, i).upper(), number = n }
+end
+
+// Spaces, commas and semicolons separate references. R1-R4 expands inclusively.
+pub func Parse(text: str): Result:
+    mut result := Result {}
+    tokens := str.Replace(str.Replace(str.Replace(text.trim(), ",", " "), ";", " "), "\t", " ").split(" ")
+    repeat tokens.len() in i:
+        token := tokens.get(i)
+        if token.len() == 0: continue end
+        ends := token.split("-")
+        if ends.len() > 2:
+            result.error = "range must have exactly two reference endpoints"
+            ret result
+        end
+        first := ParseOne(ends.get(0))
+        if first.error != "": result.error = first.error ret result end
+        mut last := first
+        if ends.len() == 2: last = ParseOne(ends.get(1)) end
+        if last.error != "": result.error = last.error ret result end
+        if first.prefix != last.prefix or last.number < first.number:
+            result.error = "range endpoints must have the same prefix and ascending numbers"
+            ret result
+        end
+        count := last.number - first.number + 1
+        if count > 10000 - result.values.len():
+            result.error = "a row may contain at most 10000 references"
+            ret result
+        end
+        repeat count in offset:
+            result.values.push(first.prefix + conv.FormatInt((first.number + offset) as i64))
+        end
+    end
+    if result.values.len() == 0: result.error = "references must not be empty" end
+    ret result
+end

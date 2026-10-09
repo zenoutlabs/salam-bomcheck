@@ -1,0 +1,15 @@
+package numbers
+
+// Decimal input is bounded before multiplication, so large input cannot overflow.
+pub func Positive(text: str, maximum: int): int:
+    if text.len() == 0: ret -1 end
+    mut value := 0
+    repeat text.len() in i:
+        digit := text[i] as int - 48
+        if digit < 0 or digit > 9: ret -1 end
+        if value > (maximum - digit) / 10: ret -1 end
+        value = value * 10 + digit
+    end
+    if value < 1 or value > maximum: ret -1 end
+    ret value
+end
