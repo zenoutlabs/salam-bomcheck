@@ -28,7 +28,8 @@ func main(): int:
     end
     result := bom.Validate(contents.text)
     if args.json: println report.Json(result) else:
-        println report.Text(result) end
+        println report.Text(result)
+    end
     if result.errors.len() > 0: ret 1 end
     ret 0
 end
