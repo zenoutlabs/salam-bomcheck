@@ -1,0 +1,111 @@
+package bom
+
+import conv
+
+include csv "csv_input.salam"
+include numbers "numbers.salam"
+include references "references.salam"
+
+pub struct Diagnostic:
+    pub line: int = 0
+    pub code: str = ""
+    pub message: str = ""
+end
+
+pub struct Part:
+    pub value: str = ""
+    pub footprint: str = ""
+    pub quantity: int = 0
+end
+
+pub struct Result:
+    pub rows: int = 0
+    pub unique_references: int = 0
+    pub parts: Vector<Part> = Vector {}
+    pub errors: Vector<Diagnostic> = Vector {}
+end
+
+func Error(result &: Result, line: int, code: str, message: str):
+    result.errors.push(Diagnostic { line = line, code = code, message = message })
+end
+
+pub func Validate(text: str): Result:
+    mut result := Result {}
+    table := csv.Parse(text)
+    if table.error != "":
+        Error(result, table.error_line, "csv", table.error)
+        ret result
+    end
+    if table.rows.len() == 0:
+        Error(result, 1, "header", "expected references,quantity,value,footprint header")
+        ret result
+    end
+    header := table.rows.get(0)
+    if header.fields.len() != 4:
+        Error(result, header.line, "header", "header must contain exactly references,quantity,value,footprint")
+        ret result
+    end
+    mut ref_column := -1
+    mut quantity_column := -1
+    mut value_column := -1
+    mut footprint_column := -1
+    repeat 4 in i:
+        name := header.fields.get(i).trim()
+        if name == "references": ref_column = i
+        else name == "quantity": quantity_column = i
+        else name == "value": value_column = i
+        else name == "footprint": footprint_column = i
+        end
+    end
+    if ref_column < 0 or quantity_column < 0 or value_column < 0 or footprint_column < 0:
+        Error(result, header.line, "header", "header names must be unique: references,quantity,value,footprint")
+        ret result
+    end
+    if table.rows.len() == 1:
+        Error(result, header.line, "empty", "BOM must contain at least one data row")
+        ret result
+    end
+    mut seen := HashMap {} as HashMap<str, int>
+    mut expanded_count := 0
+    repeat table.rows.len() - 1 in offset:
+        row := table.rows.get(offset + 1)
+        result.rows += 1
+        start_errors := result.errors.len()
+        if row.fields.len() != 4:
+            Error(result, row.line, "columns", "data row must contain exactly four CSV fields")
+            continue
+        end
+        quantity := numbers.Positive(row.fields.get(quantity_column).trim(), 10000)
+        if quantity < 0: Error(result, row.line, "quantity", "quantity must be a decimal integer between 1 and 10000") end
+        value := row.fields.get(value_column).trim()
+        footprint := row.fields.get(footprint_column).trim()
+        if value == "": Error(result, row.line, "value", "value must not be empty") end
+        if footprint == "": Error(result, row.line, "footprint", "footprint must not be empty") end
+        refs := references.Parse(row.fields.get(ref_column))
+        if refs.error != "":
+            Error(result, row.line, "references", refs.error)
+        else:
+            if refs.values.len() > 10000 - expanded_count:
+                Error(result, row.line, "limit", "BOM may contain at most 10000 expanded references")
+                ret result
+            end
+            expanded_count += refs.values.len()
+            if quantity > 0 and quantity != refs.values.len():
+                Error(result, row.line, "quantity_mismatch", "quantity differs from expanded reference count")
+            end
+            repeat refs.values.len() in index:
+                reference := refs.values.get(index)
+                if seen.has(reference):
+                    Error(result, row.line, "duplicate_reference", reference + " already occurs on line " + conv.FormatInt(seen.get(reference) as i64))
+                else:
+                    seen.put(reference, row.line)
+                    result.unique_references += 1
+                end
+            end
+        end
+        if result.errors.len() == start_errors:
+            result.parts.push(Part { value = value, footprint = footprint, quantity = quantity })
+        end
+    end
+    ret result
+end

@@ -1,0 +1,29 @@
+import os
+
+include bom "bom.salam"
+
+func assert(condition: bool):
+    if not condition: printerrln "BOM check failed" os.Exit(1) end
+end
+
+func main:
+    header := "references,quantity,value,footprint\n"
+    valid := bom.Validate(header + "R1-R3,3,10k,0402\nC1,1,100nF,0603\n")
+    assert(valid.errors.len() == 0)
+    assert(valid.rows == 2)
+    assert(valid.unique_references == 4)
+    assert(valid.parts.get(0).quantity == 3)
+    mismatch := bom.Validate(header + "R1-R3,2,10k,0402\n")
+    assert(mismatch.errors.get(0).code == "quantity_mismatch")
+    duplicate := bom.Validate(header + "R1-R3,3,10k,0402\nr2,1,22k,0402\n")
+    assert(duplicate.errors.get(0).code == "duplicate_reference")
+    assert(duplicate.errors.get(0).line == 3)
+    assert(duplicate.errors.get(0).message == "R2 already occurs on line 2")
+    assert(bom.Validate(header + "R1 R1,2,10k,0402\n").errors.get(0).code == "duplicate_reference")
+    assert(bom.Validate("quantity,references,footprint,value\n1,R1,0402,10k\n").errors.len() == 0)
+    assert(bom.Validate("references,quantity,value,value\n").errors.get(0).code == "header")
+    assert(bom.Validate(header).errors.get(0).code == "empty")
+    assert(bom.Validate(header + "R1,1,,\n").errors.len() == 2)
+    assert(bom.Validate(header + "R1,1,10k\n").errors.get(0).code == "columns")
+    println "BOM checks passed"
+end
