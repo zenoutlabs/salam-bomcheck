@@ -1,0 +1,39 @@
+package options
+
+pub struct Options:
+    pub path: str = ""
+    pub json: bool = false
+    pub help: bool = false
+    pub error: str = ""
+end
+
+pub func Parse(args: Vector<str>): Options:
+    mut out := Options {}
+    mut literal := false
+    mut index := 1
+    until index < args.len():
+        arg := args.get(index)
+        if not literal and arg == "--":
+            literal = true
+        else not literal and arg == "--json":
+            out.json = true
+        else not literal and (arg == "--help" or arg == "-h"):
+            out.help = true
+        else not literal and arg.len() > 0 and arg[0] == '-':
+            out.error = "unknown option; use --help for usage"
+            ret out
+        else out.path != "":
+            out.error = "provide exactly one CSV input file"
+            ret out
+        else:
+            out.path = arg
+        end
+        index += 1
+    end
+    if not out.help and out.path == "": out.error = "provide exactly one CSV input file" end
+    ret out
+end
+
+pub func Usage(): str:
+    ret "BOMCheck - offline BOM/reference validator built with Salam\nUsage: bomcheck [--json] [--] FILE.csv\nColumns (any order): references,quantity,value,footprint\nReferences: R1 R2; C1-C4, quoted in CSV when they contain commas.\nExit: 0 valid, 1 invalid BOM, 2 usage/input failure.\nInput is read-only. Limits: 1 MiB, 2000 data rows, 10000 expanded references."
+end

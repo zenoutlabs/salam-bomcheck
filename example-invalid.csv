@@ -1,0 +1,5 @@
+references,quantity,value,footprint
+R1-R3,2,10k,0402
+r2,1,22k,0402
+C01,1,100nF,0603
+LED1,1,,0805

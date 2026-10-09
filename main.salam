@@ -1,0 +1,34 @@
+import os
+
+include options "options.salam"
+include source "input.salam"
+include bom "bom.salam"
+include report "report.salam"
+
+func main(): int:
+    args := options.Parse(os.Args())
+    if args.error != "":
+        printerrln args.error
+        ret 2
+    end
+    if args.help:
+        println options.Usage()
+        ret 0
+    end
+    contents := source.Read(args.path)
+    if contents.error != "":
+        if args.json:
+            mut result := bom.Result {}
+            result.errors.push(bom.Diagnostic { code = "input", message = contents.error })
+            println report.Json(result)
+        else:
+            printerrln contents.error
+        end
+        ret 2
+    end
+    result := bom.Validate(contents.text)
+    if args.json: println report.Json(result) else:
+        println report.Text(result) end
+    if result.errors.len() > 0: ret 1 end
+    ret 0
+end

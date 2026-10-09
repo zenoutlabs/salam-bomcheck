@@ -1,0 +1,79 @@
+package source
+
+import io
+import os
+import str
+
+extern:
+    func ferror(stream: void*): int
+end
+
+pub struct ReadResult:
+    pub text: str = ""
+    pub error: str = ""
+end
+
+// Validate before any character-oriented string operations or JSON output.
+pub func CheckText(text: str): str:
+    bytes := (text as void*) as u8*
+    length := str.ByteLen(text)
+    mut i := 0
+    until i < length:
+        c := bytes[i] as int
+        if c < 128:
+            if (c < 32 and c != 9 and c != 10 and c != 13) or c == 127:
+                ret "input contains unsupported control bytes"
+            end
+            if c == 13 and (i + 1 >= length or bytes[i + 1] != 10):
+                ret "use LF or CRLF line endings, not bare CR"
+            end
+            i += 1
+            continue
+        end
+        mut count := 0
+        mut lower := 128
+        mut upper := 191
+        if c >= 194 and c <= 223:
+            count = 2
+        else c >= 224 and c <= 239:
+            count = 3
+            if c == 224: lower = 160 end
+            if c == 237: upper = 159 end
+        else c >= 240 and c <= 244:
+            count = 4
+            if c == 240: lower = 144 end
+            if c == 244: upper = 143 end
+        else:
+            ret "input must be valid UTF-8"
+        end
+        if i + count > length: ret "input must be valid UTF-8" end
+        second := bytes[i + 1] as int
+        if second < lower or second > upper: ret "input must be valid UTF-8" end
+        mut j := 2
+        until j < count:
+            if bytes[i + j] < 128 or bytes[i + j] > 191: ret "input must be valid UTF-8" end
+            j += 1
+        end
+        i += count
+    end
+    ret ""
+end
+
+pub func Read(path: str): ReadResult:
+    info := os.Stat(path)
+    if not info.exists or info.is_dir: ret ReadResult { error = "input must be an existing readable file" } end
+    if info.size > 1048576: ret ReadResult { error = "input exceeds 1 MiB" } end
+    file := os.Open(path, "rb")
+    if file == null: ret ReadResult { error = "cannot open input file" } end
+    text := io.Read(file, 1048577 as u64)
+    failed := ferror(file as void*)
+    io.Close(file)
+    if failed != 0: ret ReadResult { error = "could not read input file" } end
+    if str.ByteLen(text) > 1048576: ret ReadResult { error = "input exceeds 1 MiB" } end
+    if str.ByteLen(text) != info.size:
+        ret ReadResult { error = "input contains NUL bytes or changed while being read" }
+    end
+    problem := CheckText(text)
+    if problem != "": ret ReadResult { error = problem } end
+    ret ReadResult { text = text }
+end

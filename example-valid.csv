@@ -1,0 +1,5 @@
+references,quantity,value,footprint
+R1-R3,3,10kΩ,Resistor_SMD:R_0402
+R4,1,10kΩ,Resistor_SMD:R_0402
+"C1,C2",2,"100nF, 10%",Capacitor_SMD:C_0603
+LED1,1,Green,LED_SMD:LED_0805
