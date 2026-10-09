@@ -1,0 +1,28 @@
+import os
+
+include bom "bom.salam"
+include report "report.salam"
+include summary "summary.salam"
+
+func assert(condition: bool):
+    if not condition: printerrln "report check failed" os.Exit(1) end
+end
+
+func main:
+    data := "references,quantity,value,footprint\nR1-R3,3,10kΩ,0402\nR4,1,10kΩ,0402\nC1,1,100nF,0603\n"
+    valid := bom.Validate(data)
+    totals := summary.Collect(valid)
+    assert(totals.total_quantity == 5)
+    assert(totals.groups.len() == 2)
+    assert(totals.groups.get(0).quantity == 4)
+    assert(totals.groups.get(0).value == "10kΩ")
+    assert(report.Json(valid).find(`"valid":true`) >= 0)
+    assert(report.Json(valid).find(`"total_quantity":5`) >= 0)
+    assert(report.Text(valid).find("4 x 10kΩ | 0402") >= 0)
+    invalid := bom.Validate("references,quantity,value,footprint\nR1,2,10k,0402\n")
+    assert(summary.Collect(invalid).groups.len() == 0)
+    assert(report.Json(invalid).find(`"total_quantity":null`) >= 0)
+    assert(report.Json(invalid).find(`"groups":[]`) >= 0)
+    assert(report.Text(invalid).find("No purchasing summary") >= 0)
+    println "report checks passed"
+end

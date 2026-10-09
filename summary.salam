@@ -1,0 +1,32 @@
+package summary
+
+import conv
+
+include bom "bom.salam"
+
+pub struct Summary:
+    pub total_quantity: int = 0
+    pub groups: Vector<bom.Part> = Vector {}
+end
+
+// Stable first-appearance order. Never emit a partial purchasing summary.
+pub func Collect(result: bom.Result): Summary:
+    mut out := Summary {}
+    if result.errors.len() > 0: ret out end
+    mut positions := HashMap {} as HashMap<str, int>
+    repeat result.parts.len() in i:
+        part := result.parts.get(i)
+        key := conv.FormatInt(part.value.len() as i64) + ":" + part.value + part.footprint
+        out.total_quantity += part.quantity
+        if positions.has(key):
+            index := positions.get(key)
+            mut group := out.groups.get(index)
+            group.quantity += part.quantity
+            out.groups.set(index, group)
+        else:
+            positions.put(key, out.groups.len())
+            out.groups.push(part)
+        end
+    end
+    ret out
+end

@@ -1,0 +1,59 @@
+package report
+
+import conv
+import encoding.json
+import str
+
+include bom "bom.salam"
+include summary "summary.salam"
+
+func Number(n: int): str: ret conv.FormatInt(n as i64) end
+func Quote(text: str): str: ret `"` + json.Escape(text) + `"` end
+
+pub func Json(result: bom.Result): str:
+    valid := result.errors.len() == 0
+    totals := summary.Collect(result)
+    mut builder := str.NewBuilder()
+    defer str.BufFree(builder)
+    mut validity := "false"
+    mut quantity := "null"
+    if valid: validity = "true" quantity = Number(totals.total_quantity) end
+    str.BufAppend(builder, `{"valid":` + validity + `,"rows":` + Number(result.rows))
+    str.BufAppend(builder, `,"unique_references":` + Number(result.unique_references))
+    str.BufAppend(builder, `,"total_quantity":` + quantity + `,"groups":[`)
+    repeat totals.groups.len() in i:
+        if i > 0: str.BufAppend(builder, ",") end
+        part := totals.groups.get(i)
+        str.BufAppend(builder, `{"value":` + Quote(part.value) + `,"footprint":` + Quote(part.footprint) + `,"quantity":` + Number(part.quantity) + "}")
+    end
+    str.BufAppend(builder, `],"errors":[`)
+    repeat result.errors.len() in i:
+        if i > 0: str.BufAppend(builder, ",") end
+        error := result.errors.get(i)
+        str.BufAppend(builder, `{"line":` + Number(error.line) + `,"code":` + Quote(error.code) + `,"message":` + Quote(error.message) + "}")
+    end
+    str.BufAppend(builder, "]}")
+    ret str.BufStr(builder)
+end
+
+pub func Text(result: bom.Result): str:
+    mut builder := str.NewBuilder()
+    defer str.BufFree(builder)
+    if result.errors.len() > 0:
+        str.BufAppend(builder, "INVALID BOM: " + Number(result.errors.len()) + " error(s)\n")
+        repeat result.errors.len() in i:
+            error := result.errors.get(i)
+            str.BufAppend(builder, "line " + Number(error.line) + " [" + error.code + "] " + error.message + "\n")
+        end
+        str.BufAppend(builder, "No purchasing summary is emitted for an invalid BOM.")
+    else:
+        totals := summary.Collect(result)
+        str.BufAppend(builder, "VALID BOM: " + Number(result.rows) + " row(s), " + Number(result.unique_references) + " unique reference(s)\n")
+        str.BufAppend(builder, "Total quantity: " + Number(totals.total_quantity) + "\n")
+        repeat totals.groups.len() in i:
+            part := totals.groups.get(i)
+            str.BufAppend(builder, Number(part.quantity) + " x " + part.value + " | " + part.footprint + "\n")
+        end
+    end
+    ret str.BufStr(builder)
+end
